@@ -1,0 +1,85 @@
+version: "3.3"
+services:
+  rtmp-server:
+    build: ./rtmp-server/rtmp-proxy
+    ports:
+      - "1935:1935"
+      - "8081:8080"
+    depends_on:
+      - api
+    environment:
+      API_URL: "http://api:3000"
+  
+  # rtmp-monitor:
+  #   build: ./rtmp-server/rtmp-monitor
+  #   ports:
+  #     - "9091:9091"
+  #   depends_on:
+  #     - api
+  #   environment:
+  #     NGINX_ENDPOINT: "http://rtmp-server:8080"
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile-dev
+    volumes:
+      - ./api:/usr/src/app
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongo
+      - rabbit-mq
+    restart: always
+    environment:
+      NODE_ENV: "production"
+      ENVIRONMENT: "dev"
+      MONGODB_URI: "mongodb://mongo:27017/pipelines"
+      RTMP_SERVER_URI: "rtmp://rtmp-server:1935"
+      LOG_LEVEL: "debug"
+      RABBITMQ_HOST: "rabbit-mq"
+      RABBITMQ_URI: "amqp://user:password@rabbit-mq:5672"
+      PIPELINES_QUEUE: "pipelines"
+
+  mongo:
+    image: "mongo:latest"
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./mongodb-data:/data/db
+
+  # livestream-ai-worker:
+  #   build:
+  #     context: ./livestream-ai-worker
+  #     args:
+  #       GL_TOKEN: $GL_TOKEN
+    
+  #   volumes:
+  #     - ./livestream-ai-worker:/opt/app
+  #   environment:
+  #     ENVIRONMENT: "dev"
+  #     AMQP_HOST: "rabbit-mq"
+  #     AMQP_USER: "user"
+  #     AMQP_PASS: "password"
+  #     AMQP_PORT: "5672"
+  #     LIVESTREAM_PIPELINE_QUEUE: "pipelines"
+  #     LOG_LEVEL: "debug"
+  #     DETECTION_BATCH_SIZE: "10"
+  #     DETECTION_GPU_ID: "0"
+  #   runtime: nvidia
+  #   depends_on:
+  #     - rabbit-mq
+  #   restart: always
+
+  rabbit-mq:
+    image: "rabbitmq:3-management"
+    environment:
+      RABBITMQ_DEFAULT_USER: "user"
+      RABBITMQ_DEFAULT_PASS: "password"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 5s
+      timeout: 30s
+      retries: 10
